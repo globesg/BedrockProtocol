@@ -70,4 +70,62 @@ final class ItemInteractionData{
 		}
 		$this->transactionData->encodeAuthInput($out);
 	}
+
+	/** Protocol 2169+ Cereal PlayerAuthInput embedded interaction layout. Kept under the historical method name for ABI compatibility. */
+	public static function read12640(ByteBufferReader $in) : self{
+		$requestId = VarInt::readSignedInt($in);
+		$requestChangedSlots = [];
+		if($requestId !== 0){
+			$len = VarInt::readUnsignedInt($in);
+			for($i = 0; $i < $len; ++$i){
+				$requestChangedSlots[] = InventoryTransactionChangedSlotsHack::read($in);
+			}
+		}
+		$transactionData = new UseItemTransactionData();
+		$transactionData->decodeAuthInput12640($in);
+		return new self($requestId, $requestChangedSlots, $transactionData);
+	}
+
+	public function write12640(ByteBufferWriter $out) : void{
+		VarInt::writeSignedInt($out, $this->requestId);
+		if($this->requestId !== 0){
+			VarInt::writeUnsignedInt($out, count($this->requestChangedSlots));
+			foreach($this->requestChangedSlots as $changedSlot){
+				$changedSlot->write($out);
+			}
+		}
+		$this->transactionData->encodeAuthInput12640($out);
+	}
+
+	/**
+	 * Exact PlayerAuthInput embedded item-interaction layout used by the
+	 * MP-stable BedrockProtocol 1.26.40 lock.
+	 */
+	public static function readStable12640(ByteBufferReader $in) : self{
+		$requestId = VarInt::readSignedInt($in);
+		$requestChangedSlots = [];
+		$hasChangedSlots = CommonTypes::getBool($in);
+		if($hasChangedSlots && $requestId < -1 && ($requestId & 1) === 0){
+			$len = VarInt::readUnsignedInt($in);
+			for($i = 0; $i < $len; ++$i){
+				$requestChangedSlots[] = InventoryTransactionChangedSlotsHack::read($in);
+			}
+		}
+		$transactionData = new UseItemTransactionData();
+		$transactionData->decodeStable12640($in);
+		return new self($requestId, $requestChangedSlots, $transactionData);
+	}
+
+	public function writeStable12640(ByteBufferWriter $out) : void{
+		VarInt::writeSignedInt($out, $this->requestId);
+		$hasChangedSlots = $this->requestId < -1 && ($this->requestId & 1) === 0;
+		CommonTypes::putBool($out, $hasChangedSlots);
+		if($hasChangedSlots){
+			VarInt::writeUnsignedInt($out, count($this->requestChangedSlots));
+			foreach($this->requestChangedSlots as $changedSlot){
+				$changedSlot->write($out);
+			}
+		}
+		$this->transactionData->encodeStable12640($out);
+	}
 }

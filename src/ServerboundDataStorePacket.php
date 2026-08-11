@@ -16,30 +16,37 @@ namespace pocketmine\network\mcpe\protocol;
 
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
-use pocketmine\network\mcpe\protocol\types\ddui\DataStoreUpdate;
+use pocketmine\network\mcpe\protocol\types\ddui\DataStoreUpdate as LegacyDataStoreUpdate;
+use pocketmine\network\mcpe\protocol\types\DataStoreUpdate as CurrentDataStoreUpdate;
 
 class ServerboundDataStorePacket extends DataPacket implements ServerboundPacket{
 	public const NETWORK_ID = ProtocolInfo::SERVERBOUND_DATA_STORE_PACKET;
 
-	private DataStoreUpdate $update;
+	private LegacyDataStoreUpdate|CurrentDataStoreUpdate $update;
 
 	/**
 	 * @generate-create-func
 	 */
-	public static function create(DataStoreUpdate $update) : self{
+	public static function create(LegacyDataStoreUpdate|CurrentDataStoreUpdate $update) : self{
 		$result = new self;
 		$result->update = $update;
 		return $result;
 	}
 
-	public function getUpdate() : DataStoreUpdate{ return $this->update; }
+	public function getUpdate() : LegacyDataStoreUpdate|CurrentDataStoreUpdate{ return $this->update; }
 
 	protected function decodePayload(ByteBufferReader $in, int $protocolId) : void{
-		$this->update = DataStoreUpdate::read($in, $protocolId);
+		$this->update = $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? CurrentDataStoreUpdate::read($in) : LegacyDataStoreUpdate::read($in, $protocolId);
 	}
 
 	protected function encodePayload(ByteBufferWriter $out, int $protocolId) : void{
-		$this->update->write($out, $protocolId);
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			if(!$this->update instanceof CurrentDataStoreUpdate){ throw new \InvalidArgumentException("Current DataStoreUpdate required"); }
+			$this->update->write($out);
+		}else{
+			if(!$this->update instanceof LegacyDataStoreUpdate){ throw new \InvalidArgumentException("Legacy DataStoreUpdate required"); }
+			$this->update->write($out, $protocolId);
+		}
 	}
 
 	public function handle(PacketHandlerInterface $handler) : bool{

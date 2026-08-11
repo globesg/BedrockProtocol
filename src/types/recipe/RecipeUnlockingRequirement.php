@@ -1,15 +1,5 @@
 <?php
 
-/*
- * This file is part of BedrockProtocol.
- * Copyright (C) 2014-2022 PocketMine Team <https://github.com/pmmp/BedrockProtocol>
- *
- * BedrockProtocol is free software: you can redistribute it and/or modify
- * it under the terms of the GNU Lesser General Public License as published by
- * the Free Software Foundation, either version 3 of the License, or
- * (at your option) any later version.
- */
-
 declare(strict_types=1);
 
 namespace pocketmine\network\mcpe\protocol\types\recipe;
@@ -21,43 +11,60 @@ use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use function count;
 
 final class RecipeUnlockingRequirement{
+	public const CONTEXT_NONE = 0;
+	public const CONTEXT_ALWAYS_UNLOCKED = 1;
+	public const CONTEXT_PLAYER_IN_WATER = 2;
+	public const CONTEXT_PLAYER_HAS_MANY_ITEMS = 3;
 
-	/**
-	 * @param RecipeIngredient[]|null $unlockingIngredients
-	 * @phpstan-param list<RecipeIngredient>|null $unlockingIngredients
-	 */
-	public function __construct(
-		private ?array $unlockingIngredients
-	){}
-
-	/**
-	 * @return RecipeIngredient[]|null
-	 * @phpstan-return list<RecipeIngredient>|null
-	 */
+	/** @param RecipeIngredient[]|null $unlockingIngredients */
+	public function __construct(int|array|null $contextOrIngredients, ?array $unlockingIngredients = null){
+		if(is_int($contextOrIngredients)){
+			$this->unlockingContext = $contextOrIngredients;
+			$this->unlockingIngredients = $unlockingIngredients;
+		}else{
+			$this->unlockingContext = $contextOrIngredients === null ? self::CONTEXT_ALWAYS_UNLOCKED : self::CONTEXT_NONE;
+			$this->unlockingIngredients = $contextOrIngredients;
+		}
+	}
+	private int $unlockingContext;
+	/** @var RecipeIngredient[]|null */
+	private ?array $unlockingIngredients;
+	public function getUnlockingContext() : int{ return $this->unlockingContext; }
+	/** @return RecipeIngredient[]|null */
 	public function getUnlockingIngredients() : ?array{ return $this->unlockingIngredients; }
 
-	public static function read(ByteBufferReader $in) : self{
-		//I don't know what the point of this structure is. It could easily have been a list<RecipeIngredient> instead.
-		//It's basically just an optional list, which could have been done by an empty list wherever it's not needed.
-		$unlockingContext = CommonTypes::getBool($in);
-		$unlockingIngredients = null;
-		if(!$unlockingContext){
-			$unlockingIngredients = [];
-			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; $i++){
-				$unlockingIngredients[] = CommonTypes::getRecipeIngredient($in);
-			}
+	public static function readLegacy(ByteBufferReader $in) : self{
+		$ingredients = null;
+		if(!CommonTypes::getBool($in)){
+			$ingredients = [];
+			for($i=0,$count=VarInt::readUnsignedInt($in);$i<$count;$i++){ $ingredients[] = CommonTypes::getRecipeIngredient($in); }
 		}
-
-		return new self($unlockingIngredients);
+		return new self($ingredients);
 	}
-
-	public function write(ByteBufferWriter $out) : void{
+	public function writeLegacy(ByteBufferWriter $out) : void{
 		CommonTypes::putBool($out, $this->unlockingIngredients === null);
 		if($this->unlockingIngredients !== null){
 			VarInt::writeUnsignedInt($out, count($this->unlockingIngredients));
-			foreach($this->unlockingIngredients as $ingredient){
-				CommonTypes::putRecipeIngredient($out, $ingredient);
-			}
+			foreach($this->unlockingIngredients as $ingredient){ CommonTypes::putRecipeIngredient($out, $ingredient); }
 		}
 	}
+	public static function read12640(ByteBufferReader $in) : self{
+		$context = VarInt::readSignedInt($in);
+		$ingredients = null;
+		if(CommonTypes::getBool($in)){
+			$ingredients=[];
+			for($i=0,$count=VarInt::readUnsignedInt($in);$i<$count;$i++){ $ingredients[] = RecipeIngredient::read12640($in); }
+		}
+		return new self($context, $ingredients);
+	}
+	public function write12640(ByteBufferWriter $out) : void{
+		VarInt::writeSignedInt($out, $this->unlockingContext);
+		CommonTypes::putBool($out, $this->unlockingIngredients !== null);
+		if($this->unlockingIngredients !== null){
+			VarInt::writeUnsignedInt($out, count($this->unlockingIngredients));
+			foreach($this->unlockingIngredients as $ingredient){ $ingredient->write12640($out); }
+		}
+	}
+	public static function read(ByteBufferReader $in) : self{ return self::readLegacy($in); }
+	public function write(ByteBufferWriter $out) : void{ $this->writeLegacy($out); }
 }

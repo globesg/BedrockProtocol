@@ -17,7 +17,8 @@ namespace pocketmine\network\mcpe\protocol;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\VarInt;
-use pocketmine\network\mcpe\protocol\types\shape\PacketShapeData;
+use pocketmine\network\mcpe\protocol\types\shape\PacketShapeData as LegacyPacketShapeData;
+use pocketmine\network\mcpe\protocol\types\PacketShapeData as CurrentPacketShapeData;
 use function count;
 
 class PrimitiveShapesPacket extends DataPacket implements ClientboundPacket{
@@ -49,14 +50,20 @@ class PrimitiveShapesPacket extends DataPacket implements ClientboundPacket{
 	protected function decodePayload(ByteBufferReader $in, int $protocolId) : void{
 		$this->shapes = [];
 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
-			$this->shapes[] = PacketShapeData::read($in, $protocolId);
+			$this->shapes[] = $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? CurrentPacketShapeData::read($in) : LegacyPacketShapeData::read($in, $protocolId);
 		}
 	}
 
 	protected function encodePayload(ByteBufferWriter $out, int $protocolId) : void{
 		VarInt::writeUnsignedInt($out, count($this->shapes));
 		foreach($this->shapes as $shape){
-			$shape->write($out, $protocolId);
+			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+				if(!$shape instanceof CurrentPacketShapeData){ throw new \InvalidArgumentException("Current PacketShapeData required"); }
+				$shape->write($out);
+			}else{
+				if(!$shape instanceof LegacyPacketShapeData){ throw new \InvalidArgumentException("Legacy PacketShapeData required"); }
+				$shape->write($out, $protocolId);
+			}
 		}
 	}
 

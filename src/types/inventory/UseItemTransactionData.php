@@ -36,7 +36,7 @@ class UseItemTransactionData extends TransactionData{
 	public const ACTION_USE_AS_ATTACK = 3;
 
 	private int $actionType;
-	private TriggerType $triggerType;
+	private TriggerType $triggerType = TriggerType::UNKNOWN;
 	private BlockPosition $blockPosition;
 	private int $face;
 	private int $hotbarSlot;
@@ -44,8 +44,8 @@ class UseItemTransactionData extends TransactionData{
 	private Vector3 $playerPosition;
 	private Vector3 $clickPosition;
 	private int $blockRuntimeId;
-	private PredictedResult $clientInteractPrediction;
-	private int $clientCooldownState;
+	private PredictedResult $clientInteractPrediction = PredictedResult::FAILURE;
+	private int $clientCooldownState = 0;
 
 	public function getActionType() : int{
 		return $this->actionType;
@@ -196,4 +196,66 @@ class UseItemTransactionData extends TransactionData{
 		$result->actions = $actions;
 		return $result;
 	}
+
+	protected function decodeData12640(ByteBufferReader $in) : void{
+		// Bedrock 1.26.40 encodes this enum as a signed (ZigZag) VarInt.
+		// Reading it as unsigned turns CLICK_AIR (1, wire byte 0x02) into BREAK_BLOCK (2).
+		$this->actionType = VarInt::readSignedInt($in);
+		$this->triggerType = TriggerType::fromPacket(Byte::readUnsigned($in));
+		$this->blockPosition = CommonTypes::getBlockPosition($in);
+		$this->face = Byte::readUnsigned($in);
+		$this->hotbarSlot = VarInt::readSignedInt($in);
+		$this->itemInHand = CommonTypes::getNetworkItemStackDescriptor12640($in);
+		$this->playerPosition = CommonTypes::getVector3($in);
+		$this->clickPosition = CommonTypes::getVector3($in);
+		$this->blockRuntimeId = VarInt::readUnsignedInt($in);
+		$this->clientInteractPrediction = PredictedResult::fromPacket(Byte::readUnsigned($in));
+		$this->clientCooldownState = Byte::readUnsigned($in);
+	
+	}
+
+	protected function encodeData12640(ByteBufferWriter $out) : void{
+		VarInt::writeSignedInt($out, $this->actionType);
+		Byte::writeUnsigned($out, $this->triggerType->value);
+		CommonTypes::putBlockPosition($out, $this->blockPosition);
+		Byte::writeUnsigned($out, $this->face);
+		VarInt::writeSignedInt($out, $this->hotbarSlot);
+		CommonTypes::putNetworkItemStackDescriptor12640($out, $this->itemInHand);
+		CommonTypes::putVector3($out, $this->playerPosition);
+		CommonTypes::putVector3($out, $this->clickPosition);
+		VarInt::writeUnsignedInt($out, $this->blockRuntimeId);
+		Byte::writeUnsigned($out, $this->clientInteractPrediction->value);
+		Byte::writeUnsigned($out, $this->clientCooldownState);
+	
+	}
+
+	protected function decodeDataStable12640(ByteBufferReader $in) : void{
+		// Exact MP-stable BedrockProtocol 1.26.40 layout.
+		$this->actionType = VarInt::readUnsignedInt($in);
+		$this->triggerType = TriggerType::fromPacket(Byte::readUnsigned($in));
+		$this->blockPosition = CommonTypes::getBlockPosition($in);
+		$this->face = Byte::readUnsigned($in);
+		$this->hotbarSlot = VarInt::readSignedInt($in);
+		$this->itemInHand = CommonTypes::getNetworkItemStackDescriptor12640($in);
+		$this->playerPosition = CommonTypes::getVector3($in);
+		$this->clickPosition = CommonTypes::getVector3($in);
+		$this->blockRuntimeId = VarInt::readUnsignedInt($in);
+		$this->clientInteractPrediction = PredictedResult::fromPacket(Byte::readUnsigned($in));
+		$this->clientCooldownState = Byte::readUnsigned($in);
+	}
+
+	protected function encodeDataStable12640(ByteBufferWriter $out) : void{
+		VarInt::writeUnsignedInt($out, $this->actionType);
+		Byte::writeUnsigned($out, $this->triggerType->value);
+		CommonTypes::putBlockPosition($out, $this->blockPosition);
+		Byte::writeUnsigned($out, $this->face);
+		VarInt::writeSignedInt($out, $this->hotbarSlot);
+		CommonTypes::putNetworkItemStackDescriptor12640($out, $this->itemInHand);
+		CommonTypes::putVector3($out, $this->playerPosition);
+		CommonTypes::putVector3($out, $this->clickPosition);
+		VarInt::writeUnsignedInt($out, $this->blockRuntimeId);
+		Byte::writeUnsigned($out, $this->clientInteractPrediction->value);
+		Byte::writeUnsigned($out, $this->clientCooldownState);
+	}
+
 }

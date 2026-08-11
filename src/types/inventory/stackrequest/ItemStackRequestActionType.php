@@ -40,4 +40,18 @@ final class ItemStackRequestActionType{
 	public const CRAFTING_LOOM = 17;
 	public const CRAFTING_NON_IMPLEMENTED_DEPRECATED_ASK_TY_LAING = 18;
 	public const CRAFTING_RESULTS_DEPRECATED_ASK_TY_LAING = 19; //no idea what this is for
+
+
+	/** Maps 1.26.40 compact action IDs back to the legacy NG IDs. */
+	public static function from12640TypeId(int $typeId) : int{
+		return $typeId >= 7 ? $typeId + 2 : $typeId;
+	}
+
+	/** Maps legacy NG IDs to the compact 1.26.40 action IDs. */
+	public static function to12640TypeId(int $typeId) : int{
+		if($typeId === self::PLACE_INTO_BUNDLE || $typeId === self::TAKE_FROM_BUNDLE){
+			throw new \InvalidArgumentException("Bundle stack request actions were removed in 1.26.40");
+		}
+		return $typeId >= self::LAB_TABLE_COMBINE ? $typeId - 2 : $typeId;
+	}
 }

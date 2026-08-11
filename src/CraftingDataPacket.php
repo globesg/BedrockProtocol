@@ -73,45 +73,63 @@ class CraftingDataPacket extends DataPacket implements ClientboundPacket{
 	}
 
 	protected function decodePayload(ByteBufferReader $in, int $protocolId) : void{
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			$this->decodePayload12640($in, $protocolId);
+			return;
+		}
 		$recipeCount = VarInt::readUnsignedInt($in);
 		$previousType = "none";
 		for($i = 0; $i < $recipeCount; ++$i){
 			$recipeType = VarInt::readSignedInt($in);
-
 			$this->recipesWithTypeIds[] = match($recipeType){
 				self::ENTRY_SHAPELESS, self::ENTRY_USER_DATA_SHAPELESS, self::ENTRY_SHAPELESS_CHEMISTRY => ShapelessRecipe::decode($recipeType, $in, $protocolId),
 				self::ENTRY_SHAPED, self::ENTRY_SHAPED_CHEMISTRY => ShapedRecipe::decode($recipeType, $in, $protocolId),
 				self::ENTRY_FURNACE, self::ENTRY_FURNACE_DATA => FurnaceRecipe::decode($recipeType, $in),
-				self::ENTRY_MULTI => MultiRecipe::decode($recipeType, $in),
-				self::ENTRY_SMITHING_TRANSFORM => SmithingTransformRecipe::decode($recipeType, $in),
-				self::ENTRY_SMITHING_TRIM => SmithingTrimRecipe::decode($recipeType, $in),
+				self::ENTRY_MULTI => MultiRecipe::decode($recipeType, $in, $protocolId),
+				self::ENTRY_SMITHING_TRANSFORM => SmithingTransformRecipe::decode($recipeType, $in, $protocolId),
+				self::ENTRY_SMITHING_TRIM => SmithingTrimRecipe::decode($recipeType, $in, $protocolId),
 				default => throw new PacketDecodeException("Unhandled recipe type $recipeType (previous was $previousType)"),
 			};
 			$previousType = $recipeType;
 		}
+		$this->decodeTrailingData($in);
+	}
+
+	private function decodePayload12640(ByteBufferReader $in, int $protocolId) : void{
+		$decoders = [
+			self::ENTRY_SHAPED => ShapedRecipe::class,
+			self::ENTRY_SHAPELESS => ShapelessRecipe::class,
+			self::ENTRY_MULTI => MultiRecipe::class,
+			self::ENTRY_USER_DATA_SHAPELESS => ShapelessRecipe::class,
+			self::ENTRY_SHAPELESS_CHEMISTRY => ShapelessRecipe::class,
+			self::ENTRY_SHAPED_CHEMISTRY => ShapedRecipe::class,
+			self::ENTRY_SMITHING_TRANSFORM => SmithingTransformRecipe::class,
+			self::ENTRY_SMITHING_TRIM => SmithingTrimRecipe::class,
+		];
+		foreach($decoders as $typeId => $class){
+			for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
+				$this->recipesWithTypeIds[] = $class::decode($typeId, $in, $protocolId);
+			}
+		}
+		$this->decodeTrailingData($in);
+	}
+
+	private function decodeTrailingData(ByteBufferReader $in) : void{
 		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
-			$inputId = VarInt::readSignedInt($in);
-			$inputMeta = VarInt::readSignedInt($in);
-			$ingredientId = VarInt::readSignedInt($in);
-			$ingredientMeta = VarInt::readSignedInt($in);
-			$outputId = VarInt::readSignedInt($in);
-			$outputMeta = VarInt::readSignedInt($in);
-			$this->potionTypeRecipes[] = new PotionTypeRecipe($inputId, $inputMeta, $ingredientId, $ingredientMeta, $outputId, $outputMeta);
+			$this->potionTypeRecipes[] = new PotionTypeRecipe(
+				VarInt::readSignedInt($in), VarInt::readSignedInt($in), VarInt::readSignedInt($in),
+				VarInt::readSignedInt($in), VarInt::readSignedInt($in), VarInt::readSignedInt($in)
+			);
 		}
 		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
-			$input = VarInt::readSignedInt($in);
-			$ingredient = VarInt::readSignedInt($in);
-			$output = VarInt::readSignedInt($in);
-			$this->potionContainerRecipes[] = new PotionContainerChangeRecipe($input, $ingredient, $output);
+			$this->potionContainerRecipes[] = new PotionContainerChangeRecipe(VarInt::readSignedInt($in), VarInt::readSignedInt($in), VarInt::readSignedInt($in));
 		}
 		for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; ++$i){
 			$inputIdAndData = VarInt::readSignedInt($in);
 			[$inputId, $inputMeta] = [$inputIdAndData >> 16, $inputIdAndData & 0x7fff];
 			$outputs = [];
 			for($j = 0, $outputCount = VarInt::readUnsignedInt($in); $j < $outputCount; ++$j){
-				$outputItemId = VarInt::readSignedInt($in);
-				$outputItemCount = VarInt::readSignedInt($in);
-				$outputs[] = new MaterialReducerRecipeOutput($outputItemId, $outputItemCount);
+				$outputs[] = new MaterialReducerRecipeOutput(VarInt::readSignedInt($in), VarInt::readSignedInt($in));
 			}
 			$this->materialReducerRecipes[] = new MaterialReducerRecipe($inputId, $inputMeta, $outputs);
 		}
@@ -119,34 +137,47 @@ class CraftingDataPacket extends DataPacket implements ClientboundPacket{
 	}
 
 	protected function encodePayload(ByteBufferWriter $out, int $protocolId) : void{
-		VarInt::writeUnsignedInt($out, count($this->recipesWithTypeIds));
-		foreach($this->recipesWithTypeIds as $d){
-			VarInt::writeSignedInt($out, $d->getTypeId());
-			$d->encode($out, $protocolId);
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			$buckets = [
+				self::ENTRY_SHAPED => [], self::ENTRY_SHAPELESS => [], self::ENTRY_MULTI => [],
+				self::ENTRY_USER_DATA_SHAPELESS => [], self::ENTRY_SHAPELESS_CHEMISTRY => [],
+				self::ENTRY_SHAPED_CHEMISTRY => [], self::ENTRY_SMITHING_TRANSFORM => [], self::ENTRY_SMITHING_TRIM => [],
+			];
+			foreach($this->recipesWithTypeIds as $recipe){
+				$typeId = $recipe->getTypeId();
+				if(!isset($buckets[$typeId])){ throw new \InvalidArgumentException("Recipe type $typeId is not supported by protocol 1.26.40"); }
+				$buckets[$typeId][] = $recipe;
+			}
+			foreach($buckets as $recipes){
+				VarInt::writeUnsignedInt($out, count($recipes));
+				foreach($recipes as $recipe){ $recipe->encode($out, $protocolId); }
+			}
+		}else{
+			VarInt::writeUnsignedInt($out, count($this->recipesWithTypeIds));
+			foreach($this->recipesWithTypeIds as $recipe){
+				VarInt::writeSignedInt($out, $recipe->getTypeId());
+				$recipe->encode($out, $protocolId);
+			}
 		}
+		$this->encodeTrailingData($out);
+	}
+
+	private function encodeTrailingData(ByteBufferWriter $out) : void{
 		VarInt::writeUnsignedInt($out, count($this->potionTypeRecipes));
 		foreach($this->potionTypeRecipes as $recipe){
-			VarInt::writeSignedInt($out, $recipe->getInputItemId());
-			VarInt::writeSignedInt($out, $recipe->getInputItemMeta());
-			VarInt::writeSignedInt($out, $recipe->getIngredientItemId());
-			VarInt::writeSignedInt($out, $recipe->getIngredientItemMeta());
-			VarInt::writeSignedInt($out, $recipe->getOutputItemId());
-			VarInt::writeSignedInt($out, $recipe->getOutputItemMeta());
+			VarInt::writeSignedInt($out, $recipe->getInputItemId()); VarInt::writeSignedInt($out, $recipe->getInputItemMeta());
+			VarInt::writeSignedInt($out, $recipe->getIngredientItemId()); VarInt::writeSignedInt($out, $recipe->getIngredientItemMeta());
+			VarInt::writeSignedInt($out, $recipe->getOutputItemId()); VarInt::writeSignedInt($out, $recipe->getOutputItemMeta());
 		}
 		VarInt::writeUnsignedInt($out, count($this->potionContainerRecipes));
 		foreach($this->potionContainerRecipes as $recipe){
-			VarInt::writeSignedInt($out, $recipe->getInputItemId());
-			VarInt::writeSignedInt($out, $recipe->getIngredientItemId());
-			VarInt::writeSignedInt($out, $recipe->getOutputItemId());
+			VarInt::writeSignedInt($out, $recipe->getInputItemId()); VarInt::writeSignedInt($out, $recipe->getIngredientItemId()); VarInt::writeSignedInt($out, $recipe->getOutputItemId());
 		}
 		VarInt::writeUnsignedInt($out, count($this->materialReducerRecipes));
 		foreach($this->materialReducerRecipes as $recipe){
 			VarInt::writeSignedInt($out, ($recipe->getInputItemId() << 16) | $recipe->getInputItemMeta());
 			VarInt::writeUnsignedInt($out, count($recipe->getOutputs()));
-			foreach($recipe->getOutputs() as $output){
-				VarInt::writeSignedInt($out, $output->getItemId());
-				VarInt::writeSignedInt($out, $output->getCount());
-			}
+			foreach($recipe->getOutputs() as $output){ VarInt::writeSignedInt($out, $output->getItemId()); VarInt::writeSignedInt($out, $output->getCount()); }
 		}
 		CommonTypes::putBool($out, $this->cleanRecipes);
 	}

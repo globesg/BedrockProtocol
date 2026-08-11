@@ -55,6 +55,14 @@ final class SubChunkPosition{
 		LE::writeSignedInt($out, $this->z);
 	}
 
+	public static function read(ByteBufferReader $in, bool $fixed = false) : self{
+		return $fixed ? self::readFixedInts($in) : self::readVarInts($in);
+	}
+
+	public function write(ByteBufferWriter $out, bool $fixed = false) : void{
+		if($fixed){ $this->writeFixedInts($out); }else{ $this->writeVarInts($out); }
+	}
+
 	public function writeVarInts(ByteBufferWriter $out) : void{
 		VarInt::writeSignedInt($out, $this->x);
 		VarInt::writeSignedInt($out, $this->y);

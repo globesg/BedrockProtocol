@@ -32,6 +32,7 @@ class MoveActorDeltaPacket extends DataPacket implements ClientboundPacket{
 	public const FLAG_GROUND = 0x40;
 	public const FLAG_TELEPORT = 0x80;
 	public const FLAG_FORCE_MOVE_LOCAL_ENTITY = 0x100;
+	public const FLAG_FORCE_COMPLETION = 0x200;
 
 	public int $actorRuntimeId;
 	public int $flags;
@@ -60,6 +61,28 @@ class MoveActorDeltaPacket extends DataPacket implements ClientboundPacket{
 
 	protected function decodePayload(ByteBufferReader $in, int $protocolId) : void{
 		$this->actorRuntimeId = CommonTypes::getActorRuntimeId($in);
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			$this->flags = 0;
+			$readCoord = function(int $flag) use ($in) : float{
+				if(CommonTypes::getBool($in)){ $this->flags |= $flag; return LE::readFloat($in); }
+				return 0.0;
+			};
+			$readRotation = function(int $flag) use ($in) : float{
+				if(CommonTypes::getBool($in)){ $this->flags |= $flag; return CommonTypes::getRotationByte($in); }
+				return 0.0;
+			};
+			$this->xPos = $readCoord(self::FLAG_HAS_X);
+			$this->yPos = $readCoord(self::FLAG_HAS_Y);
+			$this->zPos = $readCoord(self::FLAG_HAS_Z);
+			$this->pitch = $readRotation(self::FLAG_HAS_PITCH);
+			$this->yaw = $readRotation(self::FLAG_HAS_YAW);
+			$this->headYaw = $readRotation(self::FLAG_HAS_HEAD_YAW);
+			if(CommonTypes::getBool($in)){ $this->flags |= self::FLAG_GROUND; }
+			if(CommonTypes::getBool($in)){ $this->flags |= self::FLAG_TELEPORT; }
+			if(CommonTypes::getBool($in)){ $this->flags |= self::FLAG_FORCE_MOVE_LOCAL_ENTITY; }
+			if(CommonTypes::getBool($in)){ $this->flags |= self::FLAG_FORCE_COMPLETION; }
+			return;
+		}
 		$this->flags = LE::readUnsignedShort($in);
 		$this->xPos = $this->maybeReadCoord(self::FLAG_HAS_X, $in);
 		$this->yPos = $this->maybeReadCoord(self::FLAG_HAS_Y, $in);
@@ -83,6 +106,21 @@ class MoveActorDeltaPacket extends DataPacket implements ClientboundPacket{
 
 	protected function encodePayload(ByteBufferWriter $out, int $protocolId) : void{
 		CommonTypes::putActorRuntimeId($out, $this->actorRuntimeId);
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			$writeCoord = function(int $flag, float $value) use ($out) : void{ CommonTypes::putBool($out, ($this->flags & $flag) !== 0); if(($this->flags & $flag) !== 0){ LE::writeFloat($out, $value); } };
+			$writeRotation = function(int $flag, float $value) use ($out) : void{ CommonTypes::putBool($out, ($this->flags & $flag) !== 0); if(($this->flags & $flag) !== 0){ CommonTypes::putRotationByte($out, $value); } };
+			$writeCoord(self::FLAG_HAS_X, $this->xPos);
+			$writeCoord(self::FLAG_HAS_Y, $this->yPos);
+			$writeCoord(self::FLAG_HAS_Z, $this->zPos);
+			$writeRotation(self::FLAG_HAS_PITCH, $this->pitch);
+			$writeRotation(self::FLAG_HAS_YAW, $this->yaw);
+			$writeRotation(self::FLAG_HAS_HEAD_YAW, $this->headYaw);
+			CommonTypes::putBool($out, ($this->flags & self::FLAG_GROUND) !== 0);
+			CommonTypes::putBool($out, ($this->flags & self::FLAG_TELEPORT) !== 0);
+			CommonTypes::putBool($out, ($this->flags & self::FLAG_FORCE_MOVE_LOCAL_ENTITY) !== 0);
+			CommonTypes::putBool($out, ($this->flags & self::FLAG_FORCE_COMPLETION) !== 0);
+			return;
+		}
 		LE::writeUnsignedShort($out, $this->flags);
 		$this->maybeWriteCoord(self::FLAG_HAS_X, $this->xPos, $out);
 		$this->maybeWriteCoord(self::FLAG_HAS_Y, $this->yPos, $out);

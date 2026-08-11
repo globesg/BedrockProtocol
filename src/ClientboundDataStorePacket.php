@@ -17,11 +17,14 @@ namespace pocketmine\network\mcpe\protocol;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\VarInt;
-use pocketmine\network\mcpe\protocol\types\ddui\DataStoreChange;
+use pocketmine\network\mcpe\protocol\types\ddui\DataStoreChange as LegacyDataStoreChange;
 use pocketmine\network\mcpe\protocol\types\ddui\DataStoreOperation;
-use pocketmine\network\mcpe\protocol\types\ddui\DataStoreOperationType;
-use pocketmine\network\mcpe\protocol\types\ddui\DataStoreRemoval;
-use pocketmine\network\mcpe\protocol\types\ddui\DataStoreUpdate;
+use pocketmine\network\mcpe\protocol\types\DataStoreChange as CurrentDataStoreChange;
+use pocketmine\network\mcpe\protocol\types\DataStoreRemoval as CurrentDataStoreRemoval;
+use pocketmine\network\mcpe\protocol\types\DataStoreType;
+use pocketmine\network\mcpe\protocol\types\DataStoreUpdate as CurrentDataStoreUpdate;
+use pocketmine\network\mcpe\protocol\types\ddui\DataStoreRemoval as LegacyDataStoreRemoval;
+use pocketmine\network\mcpe\protocol\types\ddui\DataStoreUpdate as LegacyDataStoreUpdate;
 use function count;
 
 class ClientboundDataStorePacket extends DataPacket implements ClientboundPacket{
@@ -48,9 +51,9 @@ class ClientboundDataStorePacket extends DataPacket implements ClientboundPacket
 		$this->values = [];
 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
 			$this->values[] = match(VarInt::readUnsignedInt($in)){
-				DataStoreOperationType::UPDATE => DataStoreUpdate::read($in, $protocolId),
-				DataStoreOperationType::CHANGE => DataStoreChange::read($in, $protocolId),
-				DataStoreOperationType::REMOVAL => DataStoreRemoval::read($in, $protocolId),
+				($protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? DataStoreType::UPDATE : \pocketmine\network\mcpe\protocol\types\ddui\DataStoreOperationType::UPDATE) => $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? CurrentDataStoreUpdate::read($in) : LegacyDataStoreUpdate::read($in, $protocolId),
+				($protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? DataStoreType::CHANGE : \pocketmine\network\mcpe\protocol\types\ddui\DataStoreOperationType::CHANGE) => $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? CurrentDataStoreChange::read($in) : LegacyDataStoreChange::read($in, $protocolId),
+				($protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? DataStoreType::REMOVAL : \pocketmine\network\mcpe\protocol\types\ddui\DataStoreOperationType::REMOVAL) => $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? CurrentDataStoreRemoval::read($in) : LegacyDataStoreRemoval::read($in, $protocolId),
 				default => throw new PacketDecodeException("Unknown DataStore type"),
 			};
 		}
@@ -60,7 +63,17 @@ class ClientboundDataStorePacket extends DataPacket implements ClientboundPacket
 		VarInt::writeUnsignedInt($out, count($this->values));
 		foreach($this->values as $value){
 			VarInt::writeUnsignedInt($out, $value->getTypeId());
-			$value->write($out, $protocolId);
+			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+				if(!$value instanceof \pocketmine\network\mcpe\protocol\types\DataStore){
+					throw new \InvalidArgumentException("1.26.40 requires current DataStore values");
+				}
+				$value->write($out);
+			}else{
+				if(!$value instanceof \pocketmine\network\mcpe\protocol\types\ddui\DataStoreOperation){
+					throw new \InvalidArgumentException("Legacy protocols require legacy DataStoreOperation values");
+				}
+				$value->write($out, $protocolId);
+			}
 		}
 	}
 

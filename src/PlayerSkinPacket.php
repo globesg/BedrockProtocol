@@ -42,18 +42,28 @@ class PlayerSkinPacket extends DataPacket implements ClientboundPacket, Serverbo
 
 	protected function decodePayload(ByteBufferReader $in, int $protocolId) : void{
 		$this->uuid = CommonTypes::getUUID($in);
-		$this->skin = CommonTypes::getSkin($in);
-		$this->newSkinName = CommonTypes::getString($in);
-		$this->oldSkinName = CommonTypes::getString($in);
-		$this->skin->setVerified(CommonTypes::getBool($in));
+		$this->skin = $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? CommonTypes::getSkin12640($in) : CommonTypes::getSkin($in);
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			$this->oldSkinName = CommonTypes::getString($in);
+			$this->newSkinName = CommonTypes::getString($in);
+		}else{
+			$this->newSkinName = CommonTypes::getString($in);
+			$this->oldSkinName = CommonTypes::getString($in);
+			$this->skin->setVerified(CommonTypes::getBool($in));
+		}
 	}
 
 	protected function encodePayload(ByteBufferWriter $out, int $protocolId) : void{
 		CommonTypes::putUUID($out, $this->uuid);
-		CommonTypes::putSkin($out, $this->skin);
-		CommonTypes::putString($out, $this->newSkinName);
-		CommonTypes::putString($out, $this->oldSkinName);
-		CommonTypes::putBool($out, $this->skin->isVerified());
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){ CommonTypes::putSkin12640($out, $this->skin); }else{ CommonTypes::putSkin($out, $this->skin); }
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			CommonTypes::putString($out, $this->oldSkinName);
+			CommonTypes::putString($out, $this->newSkinName);
+		}else{
+			CommonTypes::putString($out, $this->newSkinName);
+			CommonTypes::putString($out, $this->oldSkinName);
+			CommonTypes::putBool($out, $this->skin->isVerified());
+		}
 	}
 
 	public function handle(PacketHandlerInterface $handler) : bool{

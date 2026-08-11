@@ -84,13 +84,16 @@ final class ItemStackRequest{
 		$requestId = CommonTypes::readItemStackRequestId($in);
 		$actions = [];
 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
-			$typeId = Byte::readUnsigned($in);
+			if($protocolId >= \pocketmine\network\mcpe\protocol\ProtocolInfo::PROTOCOL_1_26_40){
+				$typeId = ItemStackRequestActionType::from12640TypeId(VarInt::readUnsignedInt($in));
+				Byte::readUnsigned($in); //legacy action ID retained on the wire but ignored
+			}else{
+				$typeId = Byte::readUnsigned($in);
+			}
 			$actions[] = self::readAction($in, $protocolId, $typeId);
 		}
 		$filterStrings = [];
-		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
-			$filterStrings[] = CommonTypes::getString($in);
-		}
+		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){ $filterStrings[] = CommonTypes::getString($in); }
 		$filterStringCause = LE::readSignedInt($in);
 		return new self($requestId, $actions, $filterStrings, $filterStringCause);
 	}
@@ -99,13 +102,16 @@ final class ItemStackRequest{
 		CommonTypes::writeItemStackRequestId($out, $this->requestId);
 		VarInt::writeUnsignedInt($out, count($this->actions));
 		foreach($this->actions as $action){
-			Byte::writeUnsigned($out, $action->getTypeId());
+			if($protocolId >= \pocketmine\network\mcpe\protocol\ProtocolInfo::PROTOCOL_1_26_40){
+				VarInt::writeUnsignedInt($out, ItemStackRequestActionType::to12640TypeId($action->getTypeId()));
+				Byte::writeUnsigned($out, $action->getTypeId());
+			}else{
+				Byte::writeUnsigned($out, $action->getTypeId());
+			}
 			$action->write($out, $protocolId);
 		}
 		VarInt::writeUnsignedInt($out, count($this->filterStrings));
-		foreach($this->filterStrings as $string){
-			CommonTypes::putString($out, $string);
-		}
+		foreach($this->filterStrings as $string){ CommonTypes::putString($out, $string); }
 		LE::writeSignedInt($out, $this->filterStringCause);
 	}
 }

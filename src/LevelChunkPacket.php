@@ -99,6 +99,21 @@ class LevelChunkPacket extends DataPacket implements ClientboundPacket{
 	}
 
 	protected function decodePayload(ByteBufferReader $in, int $protocolId) : void{
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			$this->chunkPosition = ChunkPosition::read($in);
+			$this->dimensionId = VarInt::readSignedInt($in);
+			$this->subChunkCount = VarInt::readUnsignedInt($in);
+			$limit = CommonTypes::getBool($in) ? VarInt::readSignedInt($in) : null;
+			$this->clientSubChunkRequestsEnabled = $limit !== null;
+			$cacheEnabled = CommonTypes::getBool($in);
+			$hashes = [];
+			$count = VarInt::readUnsignedInt($in);
+			if($count > self::MAX_BLOB_HASHES){ throw new PacketDecodeException("Expected at most " . self::MAX_BLOB_HASHES . " blob hashes, got " . $count); }
+			for($i = 0; $i < $count; ++$i){ $hashes[] = LE::readUnsignedLong($in); }
+			$this->usedBlobHashes = $cacheEnabled ? $hashes : null;
+			$this->extraPayload = CommonTypes::getString($in);
+			return;
+		}
 		$this->chunkPosition = ChunkPosition::read($in);
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_20_60){
 			$this->dimensionId = VarInt::readSignedInt($in);
@@ -131,6 +146,19 @@ class LevelChunkPacket extends DataPacket implements ClientboundPacket{
 	}
 
 	protected function encodePayload(ByteBufferWriter $out, int $protocolId) : void{
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			$this->chunkPosition->write($out);
+			VarInt::writeSignedInt($out, $this->dimensionId);
+			VarInt::writeUnsignedInt($out, $this->subChunkCount);
+			CommonTypes::putBool($out, $this->clientSubChunkRequestsEnabled);
+			if($this->clientSubChunkRequestsEnabled){ VarInt::writeSignedInt($out, $this->subChunkCount); }
+			CommonTypes::putBool($out, $this->usedBlobHashes !== null);
+			$hashes = $this->usedBlobHashes ?? [];
+			VarInt::writeUnsignedInt($out, count($hashes));
+			foreach($hashes as $hash){ LE::writeUnsignedLong($out, $hash); }
+			CommonTypes::putString($out, $this->extraPayload);
+			return;
+		}
 		$this->chunkPosition->write($out);
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_20_60){
 			VarInt::writeSignedInt($out, $this->dimensionId);

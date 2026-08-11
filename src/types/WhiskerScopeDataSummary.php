@@ -30,36 +30,41 @@ final class WhiskerScopeDataSummary{
 	){}
 
 	public function getLabel() : string{ return $this->label; }
-
 	public function getIndentation() : string{ return $this->indentation; }
-
 	public function getTotalHighCostNS() : int{ return $this->totalHighCostNS; }
-
 	public function getTotalMidCostNS() : int{ return $this->totalMidCostNS; }
-
 	public function getTotalLowCostNS() : int{ return $this->totalLowCostNS; }
 
-	public static function read(ByteBufferReader $in) : self{
-		$label = CommonTypes::getString($in);
-		$indentation = CommonTypes::getString($in);
-		$totalHighCostNS = LE::readUnsignedLong($in);
-		$totalMidCostNS = LE::readUnsignedLong($in);
-		$totalLowCostNS = LE::readUnsignedLong($in);
-
-		return new self(
-			$label,
-			$indentation,
-			$totalHighCostNS,
-			$totalMidCostNS,
-			$totalLowCostNS
-		);
+	public static function read(ByteBufferReader $in, bool $current = false) : self{
+		if($current){
+			$indentation = CommonTypes::getString($in);
+			$label = CommonTypes::getString($in);
+			$totalHighCostNS = LE::readSignedLong($in);
+			$totalMidCostNS = LE::readSignedLong($in);
+			$totalLowCostNS = LE::readSignedLong($in);
+		}else{
+			$label = CommonTypes::getString($in);
+			$indentation = CommonTypes::getString($in);
+			$totalHighCostNS = LE::readUnsignedLong($in);
+			$totalMidCostNS = LE::readUnsignedLong($in);
+			$totalLowCostNS = LE::readUnsignedLong($in);
+		}
+		return new self($label, $indentation, $totalHighCostNS, $totalMidCostNS, $totalLowCostNS);
 	}
 
-	public function write(ByteBufferWriter $out) : void{
-		CommonTypes::putString($out, $this->label);
-		CommonTypes::putString($out, $this->indentation);
-		LE::writeUnsignedLong($out, $this->totalHighCostNS);
-		LE::writeUnsignedLong($out, $this->totalMidCostNS);
-		LE::writeUnsignedLong($out, $this->totalLowCostNS);
+	public function write(ByteBufferWriter $out, bool $current = false) : void{
+		if($current){
+			CommonTypes::putString($out, $this->indentation);
+			CommonTypes::putString($out, $this->label);
+			LE::writeSignedLong($out, $this->totalHighCostNS);
+			LE::writeSignedLong($out, $this->totalMidCostNS);
+			LE::writeSignedLong($out, $this->totalLowCostNS);
+		}else{
+			CommonTypes::putString($out, $this->label);
+			CommonTypes::putString($out, $this->indentation);
+			LE::writeUnsignedLong($out, $this->totalHighCostNS);
+			LE::writeUnsignedLong($out, $this->totalMidCostNS);
+			LE::writeUnsignedLong($out, $this->totalLowCostNS);
+		}
 	}
 }

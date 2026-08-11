@@ -17,6 +17,7 @@ namespace pocketmine\network\mcpe\protocol\types\recipe;
 use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
+use pmmp\encoding\LE;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
 
@@ -44,5 +45,13 @@ final class MolangItemDescriptor implements ItemDescriptor{
 	public function write(ByteBufferWriter $out) : void{
 		CommonTypes::putString($out, $this->molangExpression);
 		Byte::writeUnsigned($out, $this->molangVersion);
+	}
+	public static function read12640(ByteBufferReader $in) : self{
+		return new self(CommonTypes::getString($in), LE::readUnsignedShort($in));
+	}
+
+	public function write12640(ByteBufferWriter $out) : void{
+		CommonTypes::putString($out, $this->molangExpression);
+		LE::writeUnsignedShort($out, $this->molangVersion);
 	}
 }

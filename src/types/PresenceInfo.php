@@ -36,6 +36,9 @@ final class PresenceInfo{
 	public function getRichPresenceId() : string{ return $this->richPresenceId; }
 
 	public static function read(ByteBufferReader $in, int $protocolId) : self{
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			return new self(null, null, CommonTypes::readOptional($in, CommonTypes::getString(...)) ?? "");
+		}
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
 			$experienceName = CommonTypes::readOptional($in, CommonTypes::getString(...));
 			$worldName = CommonTypes::readOptional($in, CommonTypes::getString(...));
@@ -49,7 +52,9 @@ final class PresenceInfo{
 	}
 
 	public function write(ByteBufferWriter $out, int $protocolId) : void{
-		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+			CommonTypes::writeOptional($out, $this->richPresenceId !== "" ? $this->richPresenceId : null, CommonTypes::putString(...));
+		}elseif($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
 			CommonTypes::writeOptional($out, $this->experienceName, CommonTypes::putString(...));
 			CommonTypes::writeOptional($out, $this->worldName, CommonTypes::putString(...));
 			CommonTypes::putString($out, $this->richPresenceId);

@@ -119,5 +119,8 @@ final class PlayerAuthInputFlags{
 	public const SNEAK_PRESSED_RAW = 63;
 	public const SNEAK_CURRENT_RAW = 64;
 
-	public const NUMBER_OF_FLAGS = 65;
+	public const INTERNAL_UPDATE = 65;
+
+	public const NUMBER_OF_FLAGS_LEGACY = 65;
+	public const NUMBER_OF_FLAGS = 66;
 }

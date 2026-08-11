@@ -17,6 +17,7 @@ namespace pocketmine\network\mcpe\protocol;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\LE;
+use pmmp\encoding\VarInt;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use pocketmine\network\mcpe\protocol\types\BlockPosition;
 
@@ -29,6 +30,7 @@ class PlaySoundPacket extends DataPacket implements ClientboundPacket{
 	public float $z;
 	public float $volume;
 	public float $pitch;
+	public int $loopCount = 0;
 	public ?int $serverSoundHandle = null;
 
 	/**
@@ -62,6 +64,7 @@ class PlaySoundPacket extends DataPacket implements ClientboundPacket{
 		$this->z = $blockPosition->getZ() / 8;
 		$this->volume = LE::readFloat($in);
 		$this->pitch = LE::readFloat($in);
+		$this->loopCount = $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? VarInt::readSignedInt($in) : 0;
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_20){
 			$this->serverSoundHandle = CommonTypes::readOptional($in, LE::readUnsignedLong(...));
 		}
@@ -72,6 +75,7 @@ class PlaySoundPacket extends DataPacket implements ClientboundPacket{
 		CommonTypes::putBlockPosition($out, new BlockPosition((int) ($this->x * 8), (int) ($this->y * 8), (int) ($this->z * 8)), $protocolId >= ProtocolInfo::PROTOCOL_1_26_10);
 		LE::writeFloat($out, $this->volume);
 		LE::writeFloat($out, $this->pitch);
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){ VarInt::writeSignedInt($out, $this->loopCount); }
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_20){
 			CommonTypes::writeOptional($out, $this->serverSoundHandle, LE::writeUnsignedLong(...));
 		}

@@ -184,4 +184,24 @@ class NetworkInventoryAction{
 		CommonTypes::putNetworkItemStackDescriptor($out, $this->oldItem);
 		CommonTypes::putNetworkItemStackDescriptor($out, $this->newItem);
 	}
+
+    /** Bedrock 1.26.40 native layout. */
+    public function read12640(ByteBufferReader $in) : self{
+        $this->sourceType = VarInt::readUnsignedInt($in);
+        $this->windowId = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, Byte::readSigned(...)));
+        $this->sourceFlags = CommonTypes::readOptional($in, fn(ByteBufferReader $in) => CommonTypes::readOptional($in, VarInt::readUnsignedInt(...)));
+        $this->inventorySlot = VarInt::readUnsignedInt($in);
+        $this->oldItem = CommonTypes::getNetworkItemStackDescriptor12640($in);
+        $this->newItem = CommonTypes::getNetworkItemStackDescriptor12640($in);
+        return $this;
+    }
+
+    public function write12640(ByteBufferWriter $out) : void{
+        VarInt::writeUnsignedInt($out, $this->sourceType);
+        CommonTypes::writeOptional($out, $this->windowId, fn(ByteBufferWriter $out, int $windowId) => CommonTypes::writeOptional($out, $windowId, Byte::writeSigned(...)));
+        CommonTypes::writeOptional($out, $this->sourceFlags, fn(ByteBufferWriter $out, int $sourceFlags) => CommonTypes::writeOptional($out, $sourceFlags, VarInt::writeUnsignedInt(...)));
+        VarInt::writeUnsignedInt($out, $this->inventorySlot);
+        CommonTypes::putNetworkItemStackDescriptor12640($out, $this->oldItem);
+        CommonTypes::putNetworkItemStackDescriptor12640($out, $this->newItem);
+    }
 }

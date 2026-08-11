@@ -17,6 +17,7 @@ namespace pocketmine\network\mcpe\protocol;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\LE;
+use pmmp\encoding\VarInt;
 use pocketmine\math\Vector3;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use pocketmine\network\mcpe\protocol\types\PlayerLocationType;
@@ -54,24 +55,13 @@ class PlayerLocationPacket extends DataPacket implements ClientboundPacket{
 	public function getPosition() : ?Vector3{ return $this->position; }
 
 	protected function decodePayload(ByteBufferReader $in, int $protocolId) : void{
-		$this->type = PlayerLocationType::fromPacket(LE::readUnsignedInt($in));
-		$this->actorUniqueId = CommonTypes::getActorUniqueId($in);
-
-		if($this->type === PlayerLocationType::PLAYER_LOCATION_COORDINATES){
-			$this->position = CommonTypes::getVector3($in);
-		}
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){ $this->actorUniqueId=CommonTypes::getActorUniqueId($in);$this->type=PlayerLocationType::fromPacket(VarInt::readUnsignedInt($in));VarInt::readSignedInt($in); }
+		else{ $this->type=PlayerLocationType::fromPacket(LE::readUnsignedInt($in));$this->actorUniqueId=CommonTypes::getActorUniqueId($in); }
+		if($this->type === PlayerLocationType::PLAYER_LOCATION_COORDINATES){$this->position=CommonTypes::getVector3($in);}
 	}
-
 	protected function encodePayload(ByteBufferWriter $out, int $protocolId) : void{
-		LE::writeUnsignedInt($out, $this->type->value);
-		CommonTypes::putActorUniqueId($out, $this->actorUniqueId);
-
-		if($this->type === PlayerLocationType::PLAYER_LOCATION_COORDINATES){
-			if($this->position === null){ // this should never be the case
-				throw new \LogicException("PlayerLocationPacket with type PLAYER_LOCATION_COORDINATES require a position to be provided");
-			}
-			CommonTypes::putVector3($out, $this->position);
-		}
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){CommonTypes::putActorUniqueId($out,$this->actorUniqueId);VarInt::writeUnsignedInt($out,$this->type->value);VarInt::writeSignedInt($out,0);}else{LE::writeUnsignedInt($out,$this->type->value);CommonTypes::putActorUniqueId($out,$this->actorUniqueId);}
+		if($this->type === PlayerLocationType::PLAYER_LOCATION_COORDINATES){CommonTypes::putVector3($out,$this->position ?? throw new \InvalidArgumentException("Position is required for coordinate location"));}
 	}
 
 	public function handle(PacketHandlerInterface $handler) : bool{

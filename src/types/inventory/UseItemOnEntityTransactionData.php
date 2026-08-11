@@ -119,4 +119,26 @@ class UseItemOnEntityTransactionData extends TransactionData{
 		$result->actions = $actions;
 		return $result;
 	}
+
+	protected function decodeData12640(ByteBufferReader $in) : void{
+		$this->actorRuntimeId = CommonTypes::getActorRuntimeId($in);
+		// 1.26.40 encodes this enum using ZigZag/signed VarInt, just like UseItemTransactionData.
+		// Reading it as unsigned turns ACTION_ATTACK (1) into 2 and makes the handler treat attacks as ACTION_ITEM_INTERACT.
+		$this->actionType = VarInt::readSignedInt($in);
+		$this->hotbarSlot = VarInt::readSignedInt($in);
+		$this->itemInHand = CommonTypes::getNetworkItemStackDescriptor12640($in);
+		$this->playerPosition = CommonTypes::getVector3($in);
+		$this->clickPosition = CommonTypes::getVector3($in);
+	
+	}
+
+	protected function encodeData12640(ByteBufferWriter $out) : void{
+		CommonTypes::putActorRuntimeId($out, $this->actorRuntimeId);
+		VarInt::writeSignedInt($out, $this->actionType);
+		VarInt::writeSignedInt($out, $this->hotbarSlot);
+		CommonTypes::putNetworkItemStackDescriptor12640($out, $this->itemInHand);
+		CommonTypes::putVector3($out, $this->playerPosition);
+		CommonTypes::putVector3($out, $this->clickPosition);
+	
+	}
 }

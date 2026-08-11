@@ -18,6 +18,7 @@ use pmmp\encoding\Byte;
 use pmmp\encoding\ByteBufferReader;
 use pmmp\encoding\ByteBufferWriter;
 use pmmp\encoding\VarInt;
+use pocketmine\network\mcpe\protocol\ProtocolInfo;
 use pocketmine\network\mcpe\protocol\serializer\CommonTypes;
 use pocketmine\network\mcpe\protocol\types\GetTypeIdFromConstTrait;
 use pocketmine\network\mcpe\protocol\types\inventory\ItemStack;
@@ -48,7 +49,9 @@ final class DeprecatedCraftingResultsStackRequestAction extends ItemStackRequest
 	public static function read(ByteBufferReader $in, int $protocolId) : self{
 		$results = [];
 		for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
-			$results[] = CommonTypes::getItemStackWithoutStackId($in);
+			$results[] = $protocolId >= ProtocolInfo::PROTOCOL_1_26_40
+				? ItemStackRequestNetworkItemInstanceDescriptor::read($in, $protocolId)
+				: CommonTypes::getItemStackWithoutStackId($in);
 		}
 		$iterations = Byte::readUnsigned($in);
 		return new self($results, $iterations);
@@ -57,7 +60,17 @@ final class DeprecatedCraftingResultsStackRequestAction extends ItemStackRequest
 	public function write(ByteBufferWriter $out, int $protocolId) : void{
 		VarInt::writeUnsignedInt($out, count($this->results));
 		foreach($this->results as $result){
-			CommonTypes::putItemStackWithoutStackId($out, $result);
+			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+				if(!$result instanceof ItemStackRequestNetworkItemInstanceDescriptor){
+					throw new \InvalidArgumentException("1.26.40 deprecated crafting results require ItemStackRequestNetworkItemInstanceDescriptor");
+				}
+				$result->write($out, $protocolId);
+			}else{
+				if(!$result instanceof ItemStack){
+					throw new \InvalidArgumentException("Legacy deprecated crafting results require ItemStack");
+				}
+				CommonTypes::putItemStackWithoutStackId($out, $result);
+			}
 		}
 		Byte::writeUnsigned($out, $this->iterations);
 	}

@@ -16,6 +16,8 @@ namespace pocketmine\network\mcpe\protocol\types\skin;
 
 final class PersonaPieceTintColor{
 
+	public const COLOR_COUNT = 4;
+
 	public const PIECE_TYPE_PERSONA_EYES = "persona_eyes";
 	public const PIECE_TYPE_PERSONA_HAIR = "persona_hair";
 	public const PIECE_TYPE_PERSONA_MOUTH = "persona_mouth";

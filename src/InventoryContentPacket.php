@@ -50,7 +50,9 @@ class InventoryContentPacket extends DataPacket implements ClientboundPacket{
 		$this->windowId = VarInt::readUnsignedInt($in);
 		$count = VarInt::readUnsignedInt($in);
 		for($i = 0; $i < $count; ++$i){
-			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
+			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+				$this->items[] = CommonTypes::getNetworkItemStackDescriptor12640($in);
+			}elseif($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
 				$this->items[] = CommonTypes::getNetworkItemStackDescriptor($in);
 			}else{
 				$this->items[] = CommonTypes::getItemStackWrapper($in);
@@ -58,7 +60,9 @@ class InventoryContentPacket extends DataPacket implements ClientboundPacket{
 		}
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_21_30){
 			$this->containerName = FullContainerName::read($in, $protocolId);
-			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
+			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+				$this->storage = CommonTypes::getNetworkItemStackDescriptor12640($in);
+			}elseif($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
 				$this->storage = CommonTypes::getNetworkItemStackDescriptor($in);
 			}elseif($protocolId >= ProtocolInfo::PROTOCOL_1_21_40){
 				$this->storage = CommonTypes::getItemStackWrapper($in);
@@ -74,7 +78,9 @@ class InventoryContentPacket extends DataPacket implements ClientboundPacket{
 		VarInt::writeUnsignedInt($out, $this->windowId);
 		VarInt::writeUnsignedInt($out, count($this->items));
 		foreach($this->items as $item){
-			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
+			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+				CommonTypes::putNetworkItemStackDescriptor12640($out, $item);
+			}elseif($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
 				CommonTypes::putNetworkItemStackDescriptor($out, $item);
 			}else{
 				CommonTypes::putItemStackWrapper($out, $item);
@@ -82,7 +88,9 @@ class InventoryContentPacket extends DataPacket implements ClientboundPacket{
 		}
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_21_30){
 			$this->containerName->write($out, $protocolId);
-			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
+			if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+				CommonTypes::putNetworkItemStackDescriptor12640($out, $this->storage);
+			}elseif($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
 				CommonTypes::putNetworkItemStackDescriptor($out, $this->storage);
 			}elseif($protocolId >= ProtocolInfo::PROTOCOL_1_21_40){
 				CommonTypes::putItemStackWrapper($out, $this->storage);

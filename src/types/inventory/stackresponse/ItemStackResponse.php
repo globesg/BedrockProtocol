@@ -49,25 +49,17 @@ final class ItemStackResponse{
 	public function getContainerInfos() : array{ return $this->containerInfos; }
 
 	public static function read(ByteBufferReader $in, int $protocolId) : self{
-		$result = Byte::readUnsigned($in);
-		$requestId = CommonTypes::readItemStackRequestId($in);
-		$containerInfos = [];
-		if($result === self::RESULT_OK){
-			for($i = 0, $len = VarInt::readUnsignedInt($in); $i < $len; ++$i){
-				$containerInfos[] = ItemStackResponseContainerInfo::read($in, $protocolId);
-			}
-		}
-		return new self($result, $requestId, $containerInfos);
+		$result=Byte::readUnsigned($in);$requestId=CommonTypes::readItemStackRequestId($in);$containerInfos=[];
+		if($protocolId >= \pocketmine\network\mcpe\protocol\ProtocolInfo::PROTOCOL_1_26_40){
+			if(CommonTypes::getBool($in) && CommonTypes::getBool($in)){for($i=0,$len=VarInt::readUnsignedInt($in);$i<$len;++$i){$containerInfos[]=ItemStackResponseContainerInfo::read($in,$protocolId);}}
+		}elseif($result === self::RESULT_OK){for($i=0,$len=VarInt::readUnsignedInt($in);$i<$len;++$i){$containerInfos[]=ItemStackResponseContainerInfo::read($in,$protocolId);}}
+		return new self($result,$requestId,$containerInfos);
+	}
+	public function write(ByteBufferWriter $out, int $protocolId) : void{
+		Byte::writeUnsigned($out,$this->result);CommonTypes::writeItemStackRequestId($out,$this->requestId);
+		if($protocolId >= \pocketmine\network\mcpe\protocol\ProtocolInfo::PROTOCOL_1_26_40){
+			$has=count($this->containerInfos)!==0;CommonTypes::putBool($out,$has);if($has){CommonTypes::putBool($out,true);VarInt::writeUnsignedInt($out,count($this->containerInfos));foreach($this->containerInfos as $info){$info->write($out,$protocolId);}}
+		}elseif($this->result === self::RESULT_OK){VarInt::writeUnsignedInt($out,count($this->containerInfos));foreach($this->containerInfos as $info){$info->write($out,$protocolId);}}
 	}
 
-	public function write(ByteBufferWriter $out, int $protocolId) : void{
-		Byte::writeUnsigned($out, $this->result);
-		CommonTypes::writeItemStackRequestId($out, $this->requestId);
-		if($this->result === self::RESULT_OK){
-			VarInt::writeUnsignedInt($out, count($this->containerInfos));
-			foreach($this->containerInfos as $containerInfo){
-				$containerInfo->write($out, $protocolId);
-			}
-		}
-	}
 }

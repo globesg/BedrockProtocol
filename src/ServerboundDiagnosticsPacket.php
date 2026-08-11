@@ -21,6 +21,7 @@ use pmmp\encoding\VarInt;
 use pocketmine\network\mcpe\protocol\types\EntityDiagnosticTimingInfo;
 use pocketmine\network\mcpe\protocol\types\MemoryCategoryCounter;
 use pocketmine\network\mcpe\protocol\types\SystemDiagnosticTimingInfo;
+use pocketmine\network\mcpe\protocol\types\SystemCategory;
 use pocketmine\network\mcpe\protocol\types\WhiskerScopeDataSummary;
 use function count;
 
@@ -51,6 +52,8 @@ class ServerboundDiagnosticsPacket extends DataPacket implements ServerboundPack
 	 * @phpstan-var list<SystemDiagnosticTimingInfo>
 	 */
 	private array $systemDiagnostics = [];
+	/** @var SystemCategory[] @phpstan-var list<SystemCategory> */
+	private array $systemCategories = [];
 	/**
 	 * @var WhiskerScopeDataSummary[]
 	 * @phpstan-var list<WhiskerScopeDataSummary>
@@ -82,6 +85,7 @@ class ServerboundDiagnosticsPacket extends DataPacket implements ServerboundPack
 		array $entityDiagnostics,
 		array $systemDiagnostics,
 		array $whiskerScopes,
+		array $systemCategories = [],
 	) : self{
 		$result = new self;
 		$result->avgFps = $avgFps;
@@ -97,6 +101,7 @@ class ServerboundDiagnosticsPacket extends DataPacket implements ServerboundPack
 		$result->entityDiagnostics = $entityDiagnostics;
 		$result->systemDiagnostics = $systemDiagnostics;
 		$result->whiskerScopes = $whiskerScopes;
+		$result->systemCategories = $systemCategories;
 		return $result;
 	}
 
@@ -136,6 +141,9 @@ class ServerboundDiagnosticsPacket extends DataPacket implements ServerboundPack
 	 */
 	public function getSystemDiagnostics() : array{ return $this->systemDiagnostics; }
 
+	/** @return SystemCategory[] @phpstan-return list<SystemCategory> */
+	public function getSystemCategories() : array{ return $this->systemCategories; }
+
 	/**
 	 * @return WhiskerScopeDataSummary[]
 	 * @phpstan-return list<WhiskerScopeDataSummary>
@@ -171,9 +179,15 @@ class ServerboundDiagnosticsPacket extends DataPacket implements ServerboundPack
 				}
 
 				if($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
+					if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+						$this->systemCategories = [];
+						for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; $i++){
+							$this->systemCategories[] = SystemCategory::read($in);
+						}
+					}
 					$this->whiskerScopes = [];
 					for($i = 0, $count = VarInt::readUnsignedInt($in); $i < $count; $i++){
-						$this->whiskerScopes[] = WhiskerScopeDataSummary::read($in);
+						$this->whiskerScopes[] = WhiskerScopeDataSummary::read($in, $protocolId >= ProtocolInfo::PROTOCOL_1_26_40);
 					}
 				}
 			}
@@ -209,9 +223,13 @@ class ServerboundDiagnosticsPacket extends DataPacket implements ServerboundPack
 				}
 
 				if($protocolId >= ProtocolInfo::PROTOCOL_1_26_30){
+					if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){
+						VarInt::writeUnsignedInt($out, count($this->systemCategories));
+						foreach($this->systemCategories as $value){ $value->write($out); }
+					}
 					VarInt::writeUnsignedInt($out, count($this->whiskerScopes));
 					foreach($this->whiskerScopes as $value){
-						$value->write($out);
+						$value->write($out, $protocolId >= ProtocolInfo::PROTOCOL_1_26_40);
 					}
 				}
 			}

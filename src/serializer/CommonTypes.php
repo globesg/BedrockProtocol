@@ -50,6 +50,7 @@ use pocketmine\network\mcpe\protocol\types\recipe\ComplexAliasItemDescriptor;
 use pocketmine\network\mcpe\protocol\types\recipe\IntIdMetaItemDescriptor;
 use pocketmine\network\mcpe\protocol\types\recipe\ItemDescriptorType;
 use pocketmine\network\mcpe\protocol\types\recipe\MolangItemDescriptor;
+use pocketmine\network\mcpe\protocol\types\recipe\NameItemDescriptor;
 use pocketmine\network\mcpe\protocol\types\recipe\RecipeIngredient;
 use pocketmine\network\mcpe\protocol\types\recipe\StringIdMetaItemDescriptor;
 use pocketmine\network\mcpe\protocol\types\recipe\TagItemDescriptor;
@@ -404,12 +405,13 @@ final class CommonTypes{
 	 * @throws PacketDecodeException
 	 * @throws DataDecodeException
 	 */
-	public static function getEntityMetadata(ByteBufferReader $in) : array{
+	public static function getEntityMetadata(ByteBufferReader $in, ?int $protocolId = null) : array{
 		$count = VarInt::readUnsignedInt($in);
 		$data = [];
 		for($i = 0; $i < $count; ++$i){
 			$key = VarInt::readUnsignedInt($in);
 			$type = VarInt::readUnsignedInt($in);
+			if($protocolId !== null && $protocolId >= ProtocolInfo::PROTOCOL_1_26_40){ Byte::readUnsigned($in); }
 
 			$data[$key] = self::readMetadataProperty($in, $type);
 		}
@@ -440,11 +442,12 @@ final class CommonTypes{
 	 *
 	 * @phpstan-param array<int, MetadataProperty> $metadata
 	 */
-	public static function putEntityMetadata(ByteBufferWriter $out, array $metadata) : void{
+	public static function putEntityMetadata(ByteBufferWriter $out, array $metadata, ?int $protocolId = null) : void{
 		VarInt::writeUnsignedInt($out, count($metadata));
 		foreach($metadata as $key => $d){
 			VarInt::writeUnsignedInt($out, $key);
 			VarInt::writeUnsignedInt($out, $d->getTypeId());
+			if($protocolId !== null && $protocolId >= ProtocolInfo::PROTOCOL_1_26_40){ Byte::writeUnsigned($out, $d->getTypeId()); }
 			$d->write($out);
 		}
 	}
@@ -857,5 +860,65 @@ final class CommonTypes{
 		}else{
 			self::putBool($out, false);
 		}
+	}
+
+
+	/** Bedrock 1.26.40 network item descriptor (stack ID variant field was removed). */
+	public static function getNetworkItemStackDescriptor12640(ByteBufferReader $in) : ItemStackWrapper{
+		$id = LE::readSignedShort($in);
+		$count = LE::readUnsignedShort($in);
+		$meta = VarInt::readUnsignedInt($in);
+		$stackId = self::getBool($in) ? VarInt::readSignedInt($in) : 0;
+		$blockRuntimeId = Binary::signInt(VarInt::readUnsignedInt($in));
+		$rawExtraData = self::getString($in);
+		return new ItemStackWrapper($stackId, new ItemStack($id, $meta, $count, $blockRuntimeId, $rawExtraData));
+	}
+
+	public static function putNetworkItemStackDescriptor12640(ByteBufferWriter $out, ItemStackWrapper $itemStackWrapper) : void{
+		$itemStack = $itemStackWrapper->getItemStack();
+		LE::writeSignedShort($out, $itemStack->getId());
+		LE::writeUnsignedShort($out, $itemStack->getCount());
+		VarInt::writeUnsignedInt($out, $itemStack->getMeta());
+		self::putBool($out, $hasNetId = $itemStackWrapper->getStackId() !== 0);
+		if($hasNetId){ VarInt::writeSignedInt($out, $itemStackWrapper->getStackId()); }
+		VarInt::writeUnsignedInt($out, $itemStack->getBlockRuntimeId());
+		self::putString($out, $itemStack->getRawExtraData());
+	}
+	/** Bedrock 1.26.40 skin codec. */
+	public static function getSkin12640(ByteBufferReader $in) : SkinData{
+		$skinId=self::getString($in);$playFabId=self::getString($in);$resourcePatch=self::getString($in);$skinImage=self::getSkinImage($in);
+		$animations=[];for($i=0,$c=VarInt::readUnsignedInt($in);$i<$c;++$i){$animations[]=new SkinAnimation(self::getSkinImage($in),VarInt::readUnsignedInt($in),LE::readFloat($in),VarInt::readUnsignedInt($in));}
+		$cape=self::getSkinImage($in);$geometry=self::getString($in);$engine=self::getString($in);$animationData=self::getString($in);$capeId=self::getString($in);$fullSkinId=self::getString($in);
+		$armSize=Byte::readUnsigned($in);$skinColor=LE::readSignedInt($in);
+		$pieces=[];for($i=0,$c=VarInt::readUnsignedInt($in);$i<$c;++$i){$pieces[]=new PersonaSkinPiece(self::getString($in),LE::readSignedInt($in),self::getUUID($in),self::getBool($in),self::getString($in));}
+		$tints=[];for($i=0,$c=VarInt::readUnsignedInt($in);$i<$c;++$i){$type=self::getString($in);$colors=[];for($j=0;$j<4;++$j){$colors[]=LE::readSignedInt($in);}$tints[]=new PersonaPieceTintColor($type,$colors);}
+		$premium=self::getBool($in);$persona=self::getBool($in);$capeOnClassic=self::getBool($in);$primary=self::getBool($in);$override=self::getBool($in);$trusted=self::getString($in);$profileHash=self::getString($in);
+		return new SkinData($skinId,$playFabId,$resourcePatch,$skinImage,$animations,$cape,$geometry,$engine,$animationData,$capeId,$fullSkinId,$armSize,$skinColor,$pieces,$tints,true,$premium,$persona,$capeOnClassic,$primary,$override,$trusted,$profileHash);
+	}
+
+	public static function putSkin12640(ByteBufferWriter $out, SkinData $skin) : void{
+		self::putString($out,$skin->getSkinId());self::putString($out,$skin->getPlayFabId());self::putString($out,$skin->getResourcePatch());self::putSkinImage($out,$skin->getSkinImage());
+		VarInt::writeUnsignedInt($out,count($skin->getAnimations()));foreach($skin->getAnimations() as $animation){self::putSkinImage($out,$animation->getImage());VarInt::writeUnsignedInt($out,$animation->getType());LE::writeFloat($out,$animation->getFrames());VarInt::writeUnsignedInt($out,$animation->getExpressionType());}
+		self::putSkinImage($out,$skin->getCapeImage());self::putString($out,$skin->getGeometryData());self::putString($out,$skin->getGeometryDataEngineVersion());self::putString($out,$skin->getAnimationData());self::putString($out,$skin->getCapeId());self::putString($out,$skin->getFullSkinId());
+		$arm=$skin->getArmSize();Byte::writeUnsigned($out,is_int($arm)?$arm:($arm===SkinData::ARM_SIZE_SLIM?0:1));$color=$skin->getSkinColor();LE::writeSignedInt($out,is_int($color)?$color:(is_numeric($color)?(int)$color:0));
+		VarInt::writeUnsignedInt($out,count($skin->getPersonaPieces()));foreach($skin->getPersonaPieces() as $piece){self::putString($out,$piece->getPieceId());$type=$piece->getPieceType();LE::writeSignedInt($out,is_int($type)?$type:0);$pack=$piece->getPackId();self::putUUID($out,$pack instanceof UuidInterface?$pack:(Uuid::isValid($pack)?Uuid::fromString($pack):Uuid::fromString(Uuid::NIL)));self::putBool($out,$piece->isDefaultPiece());self::putString($out,$piece->getProductId());}
+		VarInt::writeUnsignedInt($out,count($skin->getPieceTintColors()));foreach($skin->getPieceTintColors() as $tint){self::putString($out,$tint->getPieceType());$colors=$tint->getColors();for($i=0;$i<4;++$i){$color=$colors[$i]??0;LE::writeSignedInt($out,is_int($color)?$color:(is_numeric($color)?(int)$color:0));}}
+		self::putBool($out,$skin->isPremium());self::putBool($out,$skin->isPersona());self::putBool($out,$skin->isPersonaCapeOnClassic());self::putBool($out,$skin->isPrimaryUser());self::putBool($out,$skin->isOverride());self::putString($out,$skin->getTrustedSkinFlag());self::putString($out,$skin->getProfileHash());
+	}
+
+	/** Bedrock 1.26.40 no-stack-ID item codec. */
+	public static function getItemStackWithoutStackId12640(ByteBufferReader $in) : ItemStack{
+		$id=VarInt::readSignedInt($in);$count=LE::readUnsignedShort($in);$meta=VarInt::readUnsignedInt($in);return self::getItemStackFooter($in,$id,$meta,$count);
+	}
+	public static function putItemStackWithoutStackId12640(ByteBufferWriter $out, ItemStack $itemStack) : void{
+		VarInt::writeSignedInt($out,$itemStack->getId());LE::writeUnsignedShort($out,$itemStack->getCount());VarInt::writeUnsignedInt($out,$itemStack->getMeta());self::putItemStackFooter($out,$itemStack);
+	}
+
+	/** Bedrock 1.26.40 generic recipe ingredient codec (non-CraftingData contexts). */
+	public static function getRecipeIngredient12640(ByteBufferReader $in) : RecipeIngredient{
+		$typeId=VarInt::readUnsignedInt($in);Byte::readUnsigned($in);$descriptor=match($typeId){ItemDescriptorType::NAME=>NameItemDescriptor::read($in),ItemDescriptorType::MOLANG=>MolangItemDescriptor::read12640($in),ItemDescriptorType::TAG=>TagItemDescriptor::read($in),default=>null};return new RecipeIngredient($descriptor,LE::readSignedShort($in));
+	}
+	public static function putRecipeIngredient12640(ByteBufferWriter $out, RecipeIngredient $ingredient) : void{
+		$type=$ingredient->getDescriptor();VarInt::writeUnsignedInt($out,$type?->getTypeId()??0);Byte::writeUnsigned($out,$type?->getTypeId()??0);if($type instanceof MolangItemDescriptor){$type->write12640($out);}else{$type?->write($out);}LE::writeSignedShort($out,$ingredient->getCount());
 	}
 }

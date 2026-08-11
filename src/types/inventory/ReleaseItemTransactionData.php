@@ -102,4 +102,20 @@ class ReleaseItemTransactionData extends TransactionData{
 		$result->actions = $actions;
 		return $result;
 	}
+
+	protected function decodeData12640(ByteBufferReader $in) : void{
+		$this->actionType = VarInt::readUnsignedInt($in);
+		$this->hotbarSlot = VarInt::readSignedInt($in);
+		$this->itemInHand = CommonTypes::getNetworkItemStackDescriptor12640($in);
+		$this->headPosition = CommonTypes::getVector3($in);
+	
+	}
+
+	protected function encodeData12640(ByteBufferWriter $out) : void{
+		VarInt::writeUnsignedInt($out, $this->actionType);
+		VarInt::writeSignedInt($out, $this->hotbarSlot);
+		CommonTypes::putNetworkItemStackDescriptor12640($out, $this->itemInHand);
+		CommonTypes::putVector3($out, $this->headPosition);
+	
+	}
 }

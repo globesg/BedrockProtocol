@@ -35,7 +35,7 @@ final class CreativeItemEntry{
 
 	public static function read(ByteBufferReader $in, int $protocolId) : self{
 		$entryId = CommonTypes::readCreativeItemNetId($in);
-		$item = CommonTypes::getItemStackWithoutStackId($in);
+		$item = $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? CommonTypes::getItemStackWithoutStackId12640($in) : CommonTypes::getItemStackWithoutStackId($in);
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_21_60){
 			$groupId = VarInt::readUnsignedInt($in);
 		}
@@ -44,7 +44,7 @@ final class CreativeItemEntry{
 
 	public function write(ByteBufferWriter $out, int $protocolId) : void{
 		CommonTypes::writeCreativeItemNetId($out, $this->entryId);
-		CommonTypes::putItemStackWithoutStackId($out, $this->item);
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){ CommonTypes::putItemStackWithoutStackId12640($out, $this->item); }else{ CommonTypes::putItemStackWithoutStackId($out, $this->item); }
 		if($protocolId >= ProtocolInfo::PROTOCOL_1_21_60){
 			VarInt::writeUnsignedInt($out, $this->groupId);
 		}

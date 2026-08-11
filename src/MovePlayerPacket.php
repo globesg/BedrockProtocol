@@ -96,9 +96,13 @@ class MovePlayerPacket extends DataPacket implements ClientboundPacket, Serverbo
 		$this->mode = Byte::readUnsigned($in);
 		$this->onGround = CommonTypes::getBool($in);
 		$this->ridingActorRuntimeId = CommonTypes::getActorRuntimeId($in);
-		if($this->mode === MovePlayerPacket::MODE_TELEPORT){
+		$hasTeleportData = $protocolId >= ProtocolInfo::PROTOCOL_1_26_40 ? CommonTypes::getBool($in) : $this->mode === MovePlayerPacket::MODE_TELEPORT;
+		if($hasTeleportData){
 			$this->teleportCause = LE::readSignedInt($in);
 			$this->teleportItem = LE::readSignedInt($in);
+		}else{
+			$this->teleportCause = 0;
+			$this->teleportItem = 0;
 		}
 		$this->tick = VarInt::readUnsignedLong($in);
 	}
@@ -112,7 +116,9 @@ class MovePlayerPacket extends DataPacket implements ClientboundPacket, Serverbo
 		Byte::writeUnsigned($out, $this->mode);
 		CommonTypes::putBool($out, $this->onGround);
 		CommonTypes::putActorRuntimeId($out, $this->ridingActorRuntimeId);
-		if($this->mode === MovePlayerPacket::MODE_TELEPORT){
+		$hasTeleportData = $this->mode === MovePlayerPacket::MODE_TELEPORT;
+		if($protocolId >= ProtocolInfo::PROTOCOL_1_26_40){ CommonTypes::putBool($out, $hasTeleportData); }
+		if($hasTeleportData){
 			LE::writeSignedInt($out, $this->teleportCause);
 			LE::writeSignedInt($out, $this->teleportItem);
 		}
